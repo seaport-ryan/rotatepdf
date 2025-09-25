@@ -3,8 +3,8 @@
 rotatepdf.py — Rotate every page in PDFs 90° CCW or CW.
 
 Examples:
-  rotatepdf.exe ccw "C:\path\file.pdf"
-  rotatepdf.exe cw --inplace "C:\path\file.pdf"
+  rotatepdf.exe ccw "C:/path/file.pdf"
+  rotatepdf.exe cw --inplace "C:/path/file.pdf"
   (or) Copy one or more full PDF paths to the clipboard (one per line), then:
   rotatepdf.exe ccw
 """
@@ -14,6 +14,16 @@ import sys
 from pathlib import Path
 import tempfile
 import shutil
+import re
+
+def _normalize_windowsish(p: str) -> str:
+    # Accept Git Bash/MSYS style /c/Users/... → C:/Users/...
+    m = re.match(r"^/([a-zA-Z])/(.*)$", p)
+    if m:
+        drive = m.group(1).upper()
+        rest = m.group(2)
+        return f"{drive}:/{rest}"
+    return p
 
 def _maybe_import_pyperclip():
     try:
@@ -23,13 +33,16 @@ def _maybe_import_pyperclip():
         return None
 
 def collect_input_paths(cli_paths, use_clipboard_default=True):
-    paths = [Path(p.strip().strip('"')) for p in cli_paths if p.strip()]
+    def clean(s: str) -> str:
+        return _normalize_windowsish(s.strip().strip('"').strip("'"))
+
+    paths = [Path(clean(p)) for p in cli_paths if p.strip()]
     if not paths and use_clipboard_default:
         pyperclip = _maybe_import_pyperclip()
         if pyperclip:
             text = (pyperclip.paste() or "").strip()
             if text:
-                candidates = [s.strip().strip('"') for s in text.replace("\r", "\n").split("\n") if s.strip()]
+                candidates = [clean(s) for s in text.replace("\r", "\n").split("\n") if s.strip()]
                 paths = [Path(c) for c in candidates]
     paths = [p for p in paths if p.exists() and p.suffix.lower() == ".pdf"]
     return paths
